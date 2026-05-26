@@ -6,9 +6,9 @@ Built with Next.js and React Three Fiber.
 
 ## Screenshots
 
-| Top View | Sepia Mode | Paper Mode (Reflow On) |
-|:---:|:---:|:---:|
-| <img src="./assets/top-view.png" width="300" alt="Top View" /> | <img src="./assets/sepia-mode.png" width="300" alt="Sepia Mode" /> | <img src="./assets/paper-mode-reflow-on.png" width="300" alt="Paper Mode with Reflow" /> |
+| Top View | Sepia Mode | Paper Mode (Reflow On) | Night Mode |
+|:---:|:---:|:---:|:---:|
+| <img src="./assets/top-view.png" width="200" alt="Top View" /> | <img src="./assets/sepia-mode.png" width="200" alt="Sepia Mode" /> | <img src="./assets/paper-mode-reflow-on.png" width="200" alt="Paper Mode with Reflow" /> | <img src="./assets/night-mode.png" width="200" alt="Night Mode" /> |
 
 ## Features
 
