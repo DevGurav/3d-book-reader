@@ -4,6 +4,12 @@ Open any PDF and read it on a realistic 3D book in the browser — two-page spre
 control sidebar, zoom-into-any-section, reading modes, and an accessibility-focused reflow mode.
 Built with Next.js and React Three Fiber.
 
+## Screenshots
+
+| Top View | Sepia Mode | Paper Mode (Reflow On) |
+|:---:|:---:|:---:|
+| <img src="./assets/top-view.png" width="300" alt="Top View" /> | <img src="./assets/sepia-mode.png" width="300" alt="Sepia Mode" /> | <img src="./assets/paper-mode-reflow-on.png" width="300" alt="Paper Mode with Reflow" /> |
+
 ## Features
 
 - **Open any PDF** — fully client-side; nothing is uploaded. Rendered with pdf.js.
