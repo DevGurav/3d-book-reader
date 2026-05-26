@@ -129,7 +129,7 @@ const MODE_LABEL = { paper: 'Paper', sepia: 'Sepia', dark: 'Night' }
 const LIGHT = {
   paper: { ambient: 1.05, color: '#ffffff', dir: 0.18 },
   sepia: { ambient: 0.95, color: '#ffe9cf', dir: 0.15 },
-  dark:  { ambient: 0.45, color: '#6a5640', dir: 0.08 },
+  dark:  { ambient: 0.85, color: '#ffffff', dir: 0.12 },
 }
 
 function makePlaceholderCanvas(mode = 'paper') {
