@@ -1,0 +1,21 @@
+{
+  "name": "3d-book-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read any PDF on a realistic 3D book in the browser — two-page spreads, zoom-into-any-section, reading modes, and reflow. Built with Next.js and React Three Fiber.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "next": "16.2.6",
+    "pdfjs-dist": "^5.7.284",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "three": "^0.184.0"
+  }
+}
