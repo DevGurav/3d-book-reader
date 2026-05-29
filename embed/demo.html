@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3D Book Reader — Embed Demo</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0f0e17; color: #eee; }
+    header { padding: 20px 24px; }
+    header h1 { margin: 0 0 4px; font-size: 18px; }
+    header p { margin: 0; font-size: 13px; color: #9aa; }
+    /* The reader fills whatever box you give it — here, most of the viewport. */
+    #reader { width: 100%; height: 82vh; }
+    code { background: #1c1b29; padding: 1px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>3D Book Reader — embed demo</h1>
+    <p>Click <strong>Open PDF</strong> in the panel and start reading. This whole page is just one
+       <code>&lt;div data-bookie&gt;</code> plus the bundle below.</p>
+  </header>
+
+  <!-- The widget auto-mounts here. Assets are loaded from this same folder. -->
+  <div id="reader"
+       data-bookie
+       data-title="Demo"
+       data-model="./book.glb"
+       data-worker="./pdf.worker.min.mjs"></div>
+
+  <script type="module" src="./bookie.js"></script>
+</body>
+</html>

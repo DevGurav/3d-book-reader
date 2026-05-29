@@ -10,6 +10,9 @@
 /build
 /dist
 
+# embed widget build output (regenerate with `npm run build:embed`)
+/embed-dist/
+
 # env / secrets
 .env
 .env*.local
