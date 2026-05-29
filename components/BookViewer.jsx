@@ -8,6 +8,7 @@ import * as THREE from 'three'
 const MODEL_PATH      = '/models/book.glb'
 const RIGHT_PAGE_NAME = 'right-top-page'
 const LEFT_PAGE_NAME  = 'left-top-page'
+const STACK_NAME      = 'pages_book'
 
 const COVER_MAT = new THREE.MeshStandardMaterial({ color: '#1a2744', roughness: 0.6, metalness: 0.0 })
 const PAGES_MAT = new THREE.MeshStandardMaterial({ color: '#FAF8F5', roughness: 0.9, metalness: 0.0 })
@@ -83,8 +84,8 @@ function injectCanvas(mesh, canvas, mirrorX, maxAnisotropy) {
     metalness: 0.0,
     side: THREE.DoubleSide,
     polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
   })
   mesh.material = mat
   return () => { tex.dispose(); mat.dispose() }
@@ -95,8 +96,11 @@ export function BookViewer({
   leftPageCanvas  = null,
   onBoundsReady   = null,
   readingMode     = 'paper',
+  coverColor      = '#1a2744',
+  modelUrl        = MODEL_PATH,
+  pageLift        = 0.03,
 }) {
-  const { scene } = useGLTF(MODEL_PATH)
+  const { scene } = useGLTF(modelUrl)
   const gl = useThree((s) => s.gl)
   const maxAnisotropy = useMemo(() => gl.capabilities.getMaxAnisotropy(), [gl])
   const clonedScene = useMemo(() => scene.clone(true), [scene])
@@ -108,7 +112,9 @@ export function BookViewer({
     clonedScene.traverse((obj) => {
       if (!obj.isMesh) return
       const role = meshRole(obj)
-      if (role === 'cover') obj.material = COVER_MAT
+      // Clone the cover template so the configurable color can be set per-instance
+      // without mutating the shared module material.
+      if (role === 'cover') obj.material = COVER_MAT.clone()
       else if (role === 'page') obj.material = PAGES_MAT.clone()
     })
 
@@ -126,6 +132,40 @@ export function BookViewer({
   useEffect(() => {
     if (readingBox && !readingBox.isEmpty() && onBoundsReady) onBoundsReady(readingBox)
   }, [readingBox, onBoundsReady])
+
+  // Apply the configurable cover color (re-runs when a buyer/embed changes the brand color).
+  useEffect(() => {
+    clonedScene.traverse((obj) => {
+      if (obj.isMesh && meshRole(obj) === 'cover' && obj.material?.color) obj.material.color.set(coverColor)
+    })
+  }, [coverColor, clonedScene])
+
+  // Seat the two top pages just above the stack so they don't look like they float, while keeping
+  // them entirely ABOVE the stack (lowest point of the page > highest point of the stack) so the two
+  // surfaces never coincide — that's what prevents the z-fighting "strips" over the text. `pageLift`
+  // (fraction of stack thickness) is the small remaining gap; tune it by eye. Idempotent: the original
+  // Y is stashed and restored each run, so live tuning never accumulates, and material effects (the
+  // injected PDF canvases) are untouched.
+  useEffect(() => {
+    const stack = clonedScene.getObjectByName(STACK_NAME)
+    if (!stack) return
+    clonedScene.updateMatrixWorld(true)
+    const stackBox = new THREE.Box3().setFromObject(stack)
+    if (stackBox.isEmpty()) return
+    const stackTopY = stackBox.max.y
+    const lift = (stackBox.max.y - stackBox.min.y) * pageLift
+    for (const name of [LEFT_PAGE_NAME, RIGHT_PAGE_NAME]) {
+      const pg = clonedScene.getObjectByName(name)
+      if (!pg) continue
+      if (pg.userData.origY === undefined) pg.userData.origY = pg.position.y
+      pg.position.y = pg.userData.origY      // reset before re-seating (idempotent across re-runs)
+      pg.updateMatrixWorld(true)
+      const pgBox = new THREE.Box3().setFromObject(pg)
+      if (pgBox.isEmpty()) continue
+      pg.position.y += (stackTopY + lift) - pgBox.min.y
+    }
+    clonedScene.updateMatrixWorld(true)
+  }, [clonedScene, pageLift])
 
   // Update paper body color when reading mode changes (the thick stack only — the top pages
   // carry the already-tinted PDF canvas).
