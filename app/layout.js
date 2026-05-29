@@ -11,9 +11,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://bookie3d.vercel.app";
+
 export const metadata = {
-  title: "Bookie — 3D Book Viewer",
-  description: "Tactile 3D book reading experience",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Bookie 3D — Read any PDF on a realistic 3D book",
+    template: "%s · Bookie 3D",
+  },
+  description:
+    "Bookie 3D is a free, in-browser PDF reader that renders your document on a realistic 3D book — "
+    + "two-page spreads, zoom into any section, Paper/Sepia/Night modes, and accessibility reflow.",
+  keywords: [
+    "3D book reader", "3D PDF reader", "3D flipbook", "flipbook", "online PDF viewer",
+    "read PDF online", "book viewer", "PDF to 3D book",
+  ],
+  applicationName: "Bookie 3D",
+  openGraph: {
+    siteName: "Bookie 3D",
+    type: "website",
+    url: SITE_URL,
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }) {
