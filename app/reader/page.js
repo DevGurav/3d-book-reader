@@ -12,7 +12,7 @@ export const metadata = {
 
 export default function ReaderPage() {
   return (
-    <main style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <main style={{ width: '100vw', height: '100dvh', overflow: 'hidden', position: 'relative' }}>
       <Link
         href="/"
         aria-label="Back to home"
