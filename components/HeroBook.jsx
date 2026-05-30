@@ -108,9 +108,11 @@ function Scene() {
   const left = useMemo(() => makeSamplePage('left'), [])
 
   const onBounds = (b) => {
-    setBox(b)
-    b.getCenter(center.current)
-    radius.current = b.getSize(new THREE.Vector3()).length() / 2 || 1
+    // b is now { both: Box3, left: Box3, right: Box3 }
+    const boxToUse = b.both || b
+    setBox(boxToUse)
+    boxToUse.getCenter(center.current)
+    radius.current = boxToUse.getSize(new THREE.Vector3()).length() / 2 || 1
   }
 
   useFrame((state) => {

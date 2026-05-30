@@ -3,6 +3,8 @@ lock mode , page flip sound , on mobile if we swipe on page in lock mode page sh
 one page mode and two page mode 
 and very first book should capture all screen whether it is on laptop or mobile.
 dylexic font support
+
+
 night mode and day mode
 bookmark support
 search functionality to find specific words or phrases within the book  

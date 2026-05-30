@@ -50,33 +50,64 @@ function Stepper({ label, onMinus, onPlus }) {
 
 // Positions the camera and OrbitControls target from a precomputed Box3.
 // Bumping `resetToken` re-runs the fit — that's what the sidebar "Reset view" button does.
-function CameraFitter({ box, direction = [0, 1, 0.001], margin = FRAME_MARGIN, resetToken = 0 }) {
+function CameraFitter({ bookBoxes, layoutMode = 'two', focusOffset = 0, direction = [0, 1, 0.001], margin = FRAME_MARGIN, resetToken = 0 }) {
   const { camera } = useThree()
   const controls = useThree((s) => s.controls)
+  
   useEffect(() => {
-    if (!box || !controls) return
-    const center = box.getCenter(new THREE.Vector3())
-    const size = box.getSize(new THREE.Vector3())
-    const sphereRadius = size.length() / 2
+    if (!bookBoxes || !controls) return
+    const fullBox = bookBoxes.both
+    const activeBox = layoutMode === 'two' ? bookBoxes.both : (focusOffset === 0 ? bookBoxes.left : bookBoxes.right)
+    
+    const fullCenter = fullBox.getCenter(new THREE.Vector3())
+    const fullSize = fullBox.getSize(new THREE.Vector3())
+
+    const activeCenter = activeBox.getCenter(new THREE.Vector3())
+    const activeSize = activeBox.getSize(new THREE.Vector3())
+
     const fovRad = (camera.fov * Math.PI) / 180
     
-    // Calculate tight fit distance based on the exact width/height of the book
-    const fitX = (size.x / 2 * margin) / (Math.tan(fovRad / 2) * camera.aspect)
-    const fitZ = (size.z / 2 * margin) / Math.tan(fovRad / 2)
+    // Calculate distance based on fitting the active portion
+    const fitX = (activeSize.x / 2 * margin) / (Math.tan(fovRad / 2) * camera.aspect)
+    const fitZ = (activeSize.z / 2 * margin) / Math.tan(fovRad / 2)
     const distance = Math.max(fitX, fitZ)
     
+    // At this camera distance, calculate how much physical width is mathematically visible
+    const visibleX = distance * Math.tan(fovRad / 2) * camera.aspect * 2
+
+    // Smart camera clamping: keep camera aimed at target page, but don't show empty void 
+    // if the rest of the book can fill that void. (Fixes extreme offset on landscape screens)
+    let targetX = activeCenter.x
+    
+    if (visibleX >= fullSize.x * margin) {
+      // Screen is wide enough to show everything anyway. Center the full book beautifully.
+      targetX = fullCenter.x
+    } else {
+      // Clamp so the screen edge hugs the book edge instead of empty space
+      const minX = fullCenter.x - (fullSize.x * margin)/2 + visibleX/2
+      const maxX = fullCenter.x + (fullSize.x * margin)/2 - visibleX/2
+      if (minX <= maxX) {
+        targetX = Math.max(minX, Math.min(maxX, targetX))
+      } else {
+        targetX = fullCenter.x
+      }
+    }
+
+    const finalCenter = activeCenter.clone()
+    finalCenter.x = targetX
+
+    const sphereRadius = activeSize.length() / 2
     const dir = new THREE.Vector3(direction[0], direction[1], direction[2]).normalize()
-    camera.position.copy(center).addScaledVector(dir, distance)
-    camera.lookAt(center)
+    camera.position.copy(finalCenter).addScaledVector(dir, distance)
+    camera.lookAt(finalCenter)
     camera.near = sphereRadius * 0.02
     camera.far = (distance + sphereRadius) * 10
     camera.updateProjectionMatrix()
-    controls.target.copy(center)
-    // Small min-distance so the user can zoom right up to a single section of the page.
+    controls.target.copy(finalCenter)
     controls.minDistance = sphereRadius * 0.05
     controls.maxDistance = distance * 4
     controls.update()
-  }, [box, camera, controls, resetToken])
+  }, [bookBoxes, camera, controls, resetToken, layoutMode, focusOffset])
   return null
 }
 
@@ -234,12 +265,30 @@ export function BookReader({ config: overrideConfig }) {
   }, [applyPdf, overrideConfig])
 
   // Track viewport width: collapse the panel to a drawer when narrow, expand it when wide.
+  const [isPortrait, setIsPortrait] = useState(false)
   useEffect(() => {
-    const mql = window.matchMedia(NARROW_QUERY)
-    const apply = () => { setIsNarrow(mql.matches); setPanelOpen(!mql.matches) }
-    apply()
-    mql.addEventListener('change', apply)
-    return () => mql.removeEventListener('change', apply)
+    const mqlNarrow = window.matchMedia(NARROW_QUERY)
+    const mqlPortrait = window.matchMedia('(orientation: portrait)')
+    
+    const applyNarrow = () => { setIsNarrow(mqlNarrow.matches); setPanelOpen(!mqlNarrow.matches) }
+    const applyPortrait = () => { 
+      setIsPortrait(mqlPortrait.matches)
+      // Force two-page mode if we switch to landscape (to avoid having one-page mode stuck on desktop)
+      if (!mqlPortrait.matches) {
+        setLayoutMode('two')
+      }
+    }
+    
+    applyNarrow()
+    applyPortrait()
+    
+    mqlNarrow.addEventListener('change', applyNarrow)
+    mqlPortrait.addEventListener('change', applyPortrait)
+    
+    return () => {
+      mqlNarrow.removeEventListener('change', applyNarrow)
+      mqlPortrait.removeEventListener('change', applyPortrait)
+    }
   }, [])
 
   // Re-paginate the extracted text whenever reflow typography changes.
@@ -445,7 +494,7 @@ export function BookReader({ config: overrideConfig }) {
               pageLift={config.pageLift}
             />
           </Suspense>
-          <CameraFitter box={activeBox} resetToken={resetToken} />
+          <CameraFitter bookBoxes={bookBoxes} layoutMode={layoutMode} focusOffset={focusOffset} resetToken={resetToken} />
           <AdaptiveResolution box={activeBox} baseScale={BASE_SCALE} maxScale={MAX_SCALE} onScale={setRenderScale} />
           <ControlsBridge apiRef={viewApi} />
           <OrbitControls
@@ -522,15 +571,19 @@ export function BookReader({ config: overrideConfig }) {
               ))}
             </div>
             
-            <div style={{ ...sectionLabel, marginTop: 16 }}>Layout</div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => setLayoutMode('one')} style={{ ...panelBtn(layoutMode === 'one'), flex: 1, padding: '7px 0' }}>
-                One Page
-              </button>
-              <button onClick={() => setLayoutMode('two')} style={{ ...panelBtn(layoutMode === 'two'), flex: 1, padding: '7px 0' }}>
-                Two Page
-              </button>
-            </div>
+            {isPortrait && (
+              <>
+                <div style={{ ...sectionLabel, marginTop: 16 }}>Layout</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => setLayoutMode('one')} style={{ ...panelBtn(layoutMode === 'one'), flex: 1, padding: '7px 0' }}>
+                    One Page
+                  </button>
+                  <button onClick={() => setLayoutMode('two')} style={{ ...panelBtn(layoutMode === 'two'), flex: 1, padding: '7px 0' }}>
+                    Two Page
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
