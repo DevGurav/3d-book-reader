@@ -170,7 +170,12 @@ export function BookReader({ config: overrideConfig }) {
 
   const [rightPageCanvas, setRightPageCanvas] = useState(null)
   const [leftPageCanvas, setLeftPageCanvas] = useState(null)
-  const [bookBox, setBookBox] = useState(null)
+  const [bookBoxes, setBookBoxes] = useState(null)
+  
+  // Layout mode controls whether we view one page at a time or the full two-page spread.
+  const [layoutMode, setLayoutMode] = useState('two') // 'one' or 'two'
+  // When in 'one' page mode, controls which side of the spread we are looking at (0 = left, 1 = right)
+  const [focusOffset, setFocusOffset] = useState(0) 
   const [readingMode, setReadingMode] = useState(config.defaultMode)
   const [renderScale, setRenderScale] = useState(BASE_SCALE)
 
@@ -336,17 +341,35 @@ export function BookReader({ config: overrideConfig }) {
     }
   }
 
-  const atFirstPage = leftPageNum <= 1
-  const atLastPage = pdfDoc ? leftPageNum + 2 > effectivePages : false
+  const atFirstPage = leftPageNum <= 1 && (layoutMode === 'two' || focusOffset === 0)
+  const atLastPage = pdfDoc ? leftPageNum + (layoutMode === 'two' ? 2 : (focusOffset === 0 ? 1 : 2)) > effectivePages : false
 
-  // Step the spread by one (two pages). The render effect repaints both pages for the new spread.
+  // Step the spread by one (two pages) or step by one page if in one-page mode.
   const handleNextPage = () => {
     if (pdfDoc && atLastPage) return
-    setLeftPageNum((n) => n + 2)
+    if (layoutMode === 'one') {
+      if (focusOffset === 0) {
+        setFocusOffset(1) // Just pan camera to the right page
+      } else {
+        setLeftPageNum((n) => n + 2) // Flip texture
+        setFocusOffset(0) // Start on left page of new spread
+      }
+    } else {
+      setLeftPageNum((n) => n + 2)
+    }
   }
   const handlePrevPage = () => {
     if (atFirstPage) return
-    setLeftPageNum((n) => Math.max(1, n - 2))
+    if (layoutMode === 'one') {
+      if (focusOffset === 1) {
+        setFocusOffset(0) // Pan camera to left page
+      } else {
+        setLeftPageNum((n) => Math.max(1, n - 2)) // Flip texture back
+        setFocusOffset(1) // Start on right page of old spread
+      }
+    } else {
+      setLeftPageNum((n) => Math.max(1, n - 2))
+    }
   }
 
   // "Reset view" — re-run the camera framing.
@@ -400,6 +423,10 @@ export function BookReader({ config: overrideConfig }) {
 
   const showAside = config.showSidebar && (isNarrow || panelOpen)
 
+  const activeBox = bookBoxes 
+    ? (layoutMode === 'two' ? bookBoxes.both : (focusOffset === 0 ? bookBoxes.left : bookBoxes.right))
+    : null
+
   return (
     <div style={{ width: '100%', height: '100%', background: bg, display: 'flex', overflow: 'hidden', position: 'relative' }}>
       {/* 3D viewport */}
@@ -411,15 +438,15 @@ export function BookReader({ config: overrideConfig }) {
             <BookViewer
               rightPageCanvas={rightPageCanvas}
               leftPageCanvas={leftPageCanvas}
-              onBoundsReady={setBookBox}
+              onBoundsReady={setBookBoxes}
               readingMode={readingMode}
               coverColor={config.coverColor}
               modelUrl={config.modelUrl}
               pageLift={config.pageLift}
             />
           </Suspense>
-          <CameraFitter box={bookBox} resetToken={resetToken} />
-          <AdaptiveResolution box={bookBox} baseScale={BASE_SCALE} maxScale={MAX_SCALE} onScale={setRenderScale} />
+          <CameraFitter box={activeBox} resetToken={resetToken} />
+          <AdaptiveResolution box={activeBox} baseScale={BASE_SCALE} maxScale={MAX_SCALE} onScale={setRenderScale} />
           <ControlsBridge apiRef={viewApi} />
           <OrbitControls
             makeDefault
@@ -486,13 +513,23 @@ export function BookReader({ config: overrideConfig }) {
         {/* Reading mode */}
         {config.showModes && (
           <div>
-            <div style={sectionLabel}>Reading mode</div>
+            <div style={sectionLabel}>Appearance</div>
             <div style={{ display: 'flex', gap: 6 }}>
               {(['paper', 'sepia', 'dark']).map((m) => (
                 <button key={m} onClick={() => setReadingMode(m)} style={{ ...panelBtn(readingMode === m), flex: 1, padding: '7px 0' }}>
                   {MODE_LABEL[m]}
                 </button>
               ))}
+            </div>
+            
+            <div style={{ ...sectionLabel, marginTop: 16 }}>Layout</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setLayoutMode('one')} style={{ ...panelBtn(layoutMode === 'one'), flex: 1, padding: '7px 0' }}>
+                One Page
+              </button>
+              <button onClick={() => setLayoutMode('two')} style={{ ...panelBtn(layoutMode === 'two'), flex: 1, padding: '7px 0' }}>
+                Two Page
+              </button>
             </div>
           </div>
         )}
@@ -573,9 +610,12 @@ export function BookReader({ config: overrideConfig }) {
             </div>
             {pdfDoc && (
               <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'rgba(255,255,255,0.55)', marginTop: 10, textAlign: 'center' }}>
-                {leftPageNum + 1 <= effectivePages
-                  ? `Pages ${leftPageNum}–${leftPageNum + 1}`
-                  : `Page ${leftPageNum}`}
+                {layoutMode === 'one' 
+                  ? `Page ${leftPageNum + focusOffset}`
+                  : (leftPageNum + 1 <= effectivePages
+                    ? `Pages ${leftPageNum}–${leftPageNum + 1}`
+                    : `Page ${leftPageNum}`)
+                }
                 {' / '}{effectivePages}
               </div>
             )}

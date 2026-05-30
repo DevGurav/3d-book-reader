@@ -108,7 +108,7 @@ export function BookViewer({
   // Prep the book once: override baked materials (covers + paper keep their lit, tactile look;
   // the top pages start as cream paper before a canvas is injected), then derive the reading-
   // surface bounds (the open spread, not the whole book volume) for tight camera framing.
-  const readingBox = useMemo(() => {
+  const readingBoxes = useMemo(() => {
     clonedScene.traverse((obj) => {
       if (!obj.isMesh) return
       const role = meshRole(obj)
@@ -122,16 +122,27 @@ export function BookViewer({
     const left  = clonedScene.getObjectByName(LEFT_PAGE_NAME)
     clonedScene.updateMatrixWorld(true)
 
-    const box = new THREE.Box3()
-    if (right) box.expandByObject(right)
-    if (left)  box.expandByObject(left)
-    return box.isEmpty() ? new THREE.Box3().setFromObject(clonedScene) : box
+    const bothBox = new THREE.Box3()
+    const leftBox = new THREE.Box3()
+    const rightBox = new THREE.Box3()
+
+    if (left) {
+      leftBox.expandByObject(left)
+      bothBox.expandByObject(left)
+    }
+    if (right) {
+      rightBox.expandByObject(right)
+      bothBox.expandByObject(right)
+    }
+    if (bothBox.isEmpty()) bothBox.setFromObject(clonedScene)
+
+    return { both: bothBox, left: leftBox, right: rightBox }
   }, [clonedScene])
 
   // Report the reading-surface bounds so the camera frames the spread tightly.
   useEffect(() => {
-    if (readingBox && !readingBox.isEmpty() && onBoundsReady) onBoundsReady(readingBox)
-  }, [readingBox, onBoundsReady])
+    if (readingBoxes && !readingBoxes.both.isEmpty() && onBoundsReady) onBoundsReady(readingBoxes)
+  }, [readingBoxes, onBoundsReady])
 
   // Apply the configurable cover color (re-runs when a buyer/embed changes the brand color).
   useEffect(() => {
