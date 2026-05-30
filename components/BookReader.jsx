@@ -226,6 +226,7 @@ export function BookReader({ config: overrideConfig }) {
   // Responsive layout: panel collapses to a slide-in drawer on narrow screens.
   const [isNarrow, setIsNarrow] = useState(false)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [focusMode, setFocusMode] = useState(false)
 
   // Reflow (re-typeset) reading mode
   const [reflowOn, setReflowOn] = useState(config.defaultReflow)
@@ -364,15 +365,84 @@ export function BookReader({ config: overrideConfig }) {
     return () => { canceled = true }
   }, [pdfDoc, leftPageNum, readingMode, renderScale, reflowOn, reflowPages, fontPx, lineHeightMul, darkness, numPages])
 
+  // Play the actual MP3 page flip sound
+  const playPageFlipSound = () => {
+    try {
+      const audio = new window.Audio('/page-flip.mp3')
+      audio.volume = 0.8
+      audio.play().catch(e => {
+        // Ignore autoplay blocks
+      })
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  const atFirstPage = leftPageNum <= 1 && (layoutMode === 'two' || focusOffset === 0)
+  const atLastPage = pdfDoc ? leftPageNum + (layoutMode === 'two' ? 2 : (focusOffset === 0 ? 1 : 2)) > effectivePages : false
+
+  // Step the spread by one (two pages) or step by one page if in one-page mode.
+  const handleNextPage = () => {
+    if (pdfDoc && atLastPage) return
+    playPageFlipSound()
+    if (layoutMode === 'one') {
+      if (focusOffset === 0) {
+        setFocusOffset(1) // Just pan camera to the right page
+      } else {
+        setLeftPageNum((n) => n + 2) // Flip texture
+        setFocusOffset(0) // Start on left page of new spread
+      }
+    } else {
+      setLeftPageNum((n) => n + 2)
+    }
+  }
+  const handlePrevPage = () => {
+    if (atFirstPage) return
+    playPageFlipSound()
+    if (layoutMode === 'one') {
+      if (focusOffset === 1) {
+        setFocusOffset(0) // Pan camera to left page
+      } else {
+        setLeftPageNum((n) => Math.max(1, n - 2)) // Flip texture back
+        setFocusOffset(1) // Start on right page of old spread
+      }
+    } else {
+      setLeftPageNum((n) => Math.max(1, n - 2))
+    }
+  }
+
   // Keyboard navigation
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); handleNextPage() }
       if (e.key === 'ArrowLeft') { e.preventDefault(); handlePrevPage() }
+      if (e.key === 'Escape') setFocusMode(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [leftPageNum, effectivePages, pdfDoc])
+  }, [leftPageNum, effectivePages, pdfDoc, layoutMode, focusOffset, atLastPage, atFirstPage])
+
+  const swipeStartRef = useRef({ x: 0, y: 0 })
+  const onPointerDown = (e) => {
+    swipeStartRef.current = { x: e.clientX, y: e.clientY }
+  }
+  const onPointerUp = (e) => {
+    if (!focusMode) return
+    const dx = e.clientX - swipeStartRef.current.x
+    const dy = e.clientY - swipeStartRef.current.y
+    // If it's a genuine swipe left/right
+    if (Math.abs(dx) > 40) {
+      if (dx < 0) handleNextPage()
+      else handlePrevPage()
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      // It's a tap or click. Left side goes back, right side goes forward.
+      if (e.clientX < window.innerWidth / 2) {
+        handlePrevPage()
+      } else {
+        handleNextPage()
+      }
+    }
+  }
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -387,37 +457,6 @@ export function BookReader({ config: overrideConfig }) {
     } finally {
       setLoading(false)
       e.target.value = ''
-    }
-  }
-
-  const atFirstPage = leftPageNum <= 1 && (layoutMode === 'two' || focusOffset === 0)
-  const atLastPage = pdfDoc ? leftPageNum + (layoutMode === 'two' ? 2 : (focusOffset === 0 ? 1 : 2)) > effectivePages : false
-
-  // Step the spread by one (two pages) or step by one page if in one-page mode.
-  const handleNextPage = () => {
-    if (pdfDoc && atLastPage) return
-    if (layoutMode === 'one') {
-      if (focusOffset === 0) {
-        setFocusOffset(1) // Just pan camera to the right page
-      } else {
-        setLeftPageNum((n) => n + 2) // Flip texture
-        setFocusOffset(0) // Start on left page of new spread
-      }
-    } else {
-      setLeftPageNum((n) => n + 2)
-    }
-  }
-  const handlePrevPage = () => {
-    if (atFirstPage) return
-    if (layoutMode === 'one') {
-      if (focusOffset === 1) {
-        setFocusOffset(0) // Pan camera to left page
-      } else {
-        setLeftPageNum((n) => Math.max(1, n - 2)) // Flip texture back
-        setFocusOffset(1) // Start on right page of old spread
-      }
-    } else {
-      setLeftPageNum((n) => Math.max(1, n - 2))
     }
   }
 
@@ -470,7 +509,7 @@ export function BookReader({ config: overrideConfig }) {
     } : {}),
   }
 
-  const showAside = config.showSidebar && (isNarrow || panelOpen)
+  const showAside = config.showSidebar && !focusMode && (isNarrow || panelOpen)
 
   const activeBox = bookBoxes 
     ? (layoutMode === 'two' ? bookBoxes.both : (focusOffset === 0 ? bookBoxes.left : bookBoxes.right))
@@ -479,7 +518,11 @@ export function BookReader({ config: overrideConfig }) {
   return (
     <div style={{ width: '100%', height: '100%', background: bg, display: 'flex', overflow: 'hidden', position: 'relative' }}>
       {/* 3D viewport */}
-      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+      <div 
+        style={{ flex: 1, position: 'relative', minWidth: 0, touchAction: focusMode ? 'none' : 'auto' }}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+      >
         <Canvas camera={{ fov: 45 }} style={{ width: '100%', height: '100%' }}>
           <ambientLight intensity={light.ambient} color={light.color} />
           <directionalLight position={[0, 6, 1]} intensity={light.dir} />
@@ -500,7 +543,9 @@ export function BookReader({ config: overrideConfig }) {
           <OrbitControls
             makeDefault
             zoomToCursor
-            enablePan
+            enableRotate={!focusMode}
+            enablePan={!focusMode}
+            enableZoom={true}
             panSpeed={0.5}
             zoomSpeed={1.8}
             enableDamping
@@ -521,8 +566,8 @@ export function BookReader({ config: overrideConfig }) {
         )}
       </div>
 
-      {/* Panel toggle — hide/show the control panel (a slide-in drawer on small screens) */}
-      {config.showSidebar && (
+      {/* Panel toggle — hide/show the control panel */}
+      {config.showSidebar && !focusMode && (
         <button
           onClick={() => setPanelOpen((o) => !o)}
           title={panelOpen ? 'Hide panel' : 'Show panel'}
@@ -536,6 +581,34 @@ export function BookReader({ config: overrideConfig }) {
         >
           {panelOpen ? '×' : '☰'}
         </button>
+      )}
+
+      {/* Focus Mode floating controls */}
+      {focusMode && (
+        <div style={{
+          position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+          display: 'flex', gap: 6, background: 'rgba(14,14,20,0.82)', padding: '6px 8px',
+          borderRadius: 24, border: '1px solid rgba(255,255,255,0.18)', alignItems: 'center'
+        }}>
+          <button 
+            onClick={(e) => { e.stopPropagation(); zoomBy(0.8) }} 
+            style={{ ...panelBtn(), border: 'none', background: 'transparent', padding: '6px 12px' }}
+          >
+            Zoom +
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setFocusMode(false) }}
+            style={{ ...panelBtn(), border: 'none', background: 'rgba(255,255,255,0.15)', padding: '6px 16px', borderRadius: 16 }}
+          >
+            Exit Focus
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); zoomBy(1.25) }} 
+            style={{ ...panelBtn(), border: 'none', background: 'transparent', padding: '6px 12px' }}
+          >
+            Zoom −
+          </button>
+        </div>
       )}
 
       {/* Control sidebar (right) — all controls live here */}
@@ -595,7 +668,10 @@ export function BookReader({ config: overrideConfig }) {
               <button onClick={() => zoomBy(0.8)} title="Zoom in (toward the center)" style={{ ...panelBtn(), flex: 1 }}>Zoom +</button>
               <button onClick={() => zoomBy(1.25)} title="Zoom out" style={{ ...panelBtn(), flex: 1 }}>Zoom −</button>
             </div>
-            <button onClick={resetView} style={{ ...panelBtn(), width: '100%', marginTop: 6 }}>Reset view</button>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button onClick={resetView} style={{ ...panelBtn(), flex: 1 }}>Reset view</button>
+              <button onClick={() => setFocusMode(true)} style={{ ...panelBtn(), flex: 1, background: accent, color: '#111' }}>Focus</button>
+            </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 8, lineHeight: 1.5 }}>
               Scroll to zoom toward the cursor · drag to rotate · right-drag to pan
             </div>
