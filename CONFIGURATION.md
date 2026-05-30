@@ -1,4 +1,4 @@
-# 3D Book Reader — Buyer Guide
+# 3D Book Reader — Configuration & Embedding
 
 Open any PDF and read it on a realistic 3D book in the browser: two-page spreads,
 zoom-into-any-section, Paper/Sepia/Night reading modes, and an accessibility
@@ -139,6 +139,6 @@ public/pdf.worker.min.mjs  pdf.js web worker
 
 ## 8. License
 
-See **`LICENSE-COMMERCIAL.md`** (direct sales) or your marketplace license
-(e.g. Envato) for usage terms, and **`THIRD-PARTY-NOTICES.md`** for the bundled
-open-source components.
+This project is released under the [MIT License](LICENSE). See
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the bundled open-source
+components.
