@@ -16,7 +16,7 @@ import { DEFAULT_CONFIG, resolveConfig } from '../lib/bookieConfig'
 const BASE_SCALE      = 3     // PDF rasterization quality at rest (× devicePixelRatio)
 const MAX_SCALE       = 6     // ceiling when zoomed in (canvas still clamped to GPU max texture size)
 const READING_PADDING = 0.06  // uniform margin around the TRIMMED page content (content-aware; consistent across books)
-const FRAME_MARGIN    = 1.25  // camera headroom around the reading spread (smaller = larger text)
+const FRAME_MARGIN    = 1.0  // camera headroom around the reading spread (smaller = larger text)
 
 // Reflow (re-typeset text) reading controls.
 const REFLOW_DEFAULTS = { fontPx: 38, lineHeightMul: 1.6, darkness: 1 }
@@ -50,7 +50,7 @@ function Stepper({ label, onMinus, onPlus }) {
 
 // Positions the camera and OrbitControls target from a precomputed Box3.
 // Bumping `resetToken` re-runs the fit — that's what the sidebar "Reset view" button does.
-function CameraFitter({ box, direction = [0, 1.2, 0.8], margin = FRAME_MARGIN, resetToken = 0 }) {
+function CameraFitter({ box, direction = [0, 1, 0.001], margin = FRAME_MARGIN, resetToken = 0 }) {
   const { camera } = useThree()
   const controls = useThree((s) => s.controls)
   useEffect(() => {

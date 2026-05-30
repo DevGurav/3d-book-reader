@@ -1,0 +1,4 @@
+ai summary for page and book
+lock mode , page flip sound , on mobile if we swipe on page in lock mode page should flip
+one page mode and two page mode 
+and very first book should capture all screen whether it is on laptop or mobile.
