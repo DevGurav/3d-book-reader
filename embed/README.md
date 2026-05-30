@@ -57,5 +57,6 @@ That's it — every `<div data-bookie>` on the page becomes a reader.
 
 ## License
 
-See the commercial license that came with your purchase (`LICENSE-COMMERCIAL.md`) and
-`THIRD-PARTY-NOTICES.md`.
+Released under the [MIT License](../LICENSE). See
+[`../THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) for the bundled
+open-source components.
