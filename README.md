@@ -4,6 +4,8 @@ Open any PDF and read it on a realistic 3D book in the browser — two-page spre
 control sidebar, zoom-into-any-section, reading modes, and an accessibility-focused reflow mode.
 Built with Next.js and React Three Fiber.
 
+**🔗 Live demo: [3d-book-reader.vercel.app](https://3d-book-reader.vercel.app/)**
+
 ## Screenshots
 
 | Top View | Sepia Mode | Paper Mode (Reflow On) | Night Mode |
