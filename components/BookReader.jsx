@@ -59,7 +59,12 @@ function CameraFitter({ box, direction = [0, 1, 0.001], margin = FRAME_MARGIN, r
     const size = box.getSize(new THREE.Vector3())
     const sphereRadius = size.length() / 2
     const fovRad = (camera.fov * Math.PI) / 180
-    const distance = (sphereRadius * margin) / Math.sin(fovRad / 2)
+    
+    // Calculate tight fit distance based on the exact width/height of the book
+    const fitX = (size.x / 2 * margin) / (Math.tan(fovRad / 2) * camera.aspect)
+    const fitZ = (size.z / 2 * margin) / Math.tan(fovRad / 2)
+    const distance = Math.max(fitX, fitZ)
+    
     const dir = new THREE.Vector3(direction[0], direction[1], direction[2]).normalize()
     camera.position.copy(center).addScaledVector(dir, distance)
     camera.lookAt(center)
@@ -89,9 +94,11 @@ function AdaptiveResolution({ box, baseScale, maxScale, onScale }) {
   useEffect(() => {
     if (!box) return
     const size = box.getSize(new THREE.Vector3())
-    const sphereRadius = size.length() / 2
     const fovRad = (camera.fov * Math.PI) / 180
-    baselineDist.current = (sphereRadius * FRAME_MARGIN) / Math.sin(fovRad / 2)
+    
+    const fitX = (size.x / 2 * FRAME_MARGIN) / (Math.tan(fovRad / 2) * camera.aspect)
+    const fitZ = (size.z / 2 * FRAME_MARGIN) / Math.tan(fovRad / 2)
+    baselineDist.current = Math.max(fitX, fitZ)
   }, [box, camera])
 
   useEffect(() => {
