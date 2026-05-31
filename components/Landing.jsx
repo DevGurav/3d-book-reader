@@ -7,9 +7,12 @@ import { HeroBook } from './HeroBook'
 import { HowItWorks } from './HowItWorks'
 import { ScrollProgress } from './ScrollProgress'
 import { Reveal } from './Reveal'
-import paperShot from '../assets/image1.png'
-import sepiaShot from '../assets/image2.png'
-import nightShot from '../assets/image3.png'
+import paperShot from '../assets/paper-mode.png'
+import sepiaShot from '../assets/sepia-mode.png'
+import nightShot from '../assets/night-mode.png'
+import reflowShot from '../assets/reflow-mode.png'
+import dictionaryShot from '../assets/dictionary-lookup-mode.png'
+import ttsShot from '../assets/text-to-speech-mode.png'
 
 const FEATURES = [
   { icon: '📖', title: 'A real 3D book', body: 'Your PDF is painted onto a true two-page spread you can rotate, tilt and orbit.' },
@@ -24,6 +27,9 @@ const MODES = [
   { src: paperShot.src, label: 'Paper' },
   { src: sepiaShot.src, label: 'Sepia' },
   { src: nightShot.src, label: 'Night' },
+  { src: reflowShot.src, label: 'Reflow' },
+  { src: dictionaryShot.src, label: 'Dictionary' },
+  { src: ttsShot.src, label: 'Text to speech' },
 ]
 
 export function Landing() {
@@ -78,8 +84,8 @@ export function Landing() {
 
       {/* Reading modes showcase */}
       <section className={styles.section}>
-        <Reveal as="h2" className={styles.h2}>Three reading modes</Reveal>
-        <Reveal as="p" className={styles.sectionSub}>Paper for daylight, Sepia for warmth, Night for the dark.</Reveal>
+        <Reveal as="h2" className={styles.h2}>Modes &amp; reading tools</Reveal>
+        <Reveal as="p" className={styles.sectionSub}>Paper, Sepia and Night themes — plus Reflow, Dictionary lookup and Text&#8209;to&#8209;speech.</Reveal>
         <div className={styles.shots}>
           {MODES.map((m, i) => (
             <Reveal key={m.label} delay={i * 90}>

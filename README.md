@@ -10,9 +10,11 @@ Built with Next.js and React Three Fiber.
 
 ## Screenshots
 
-| Top View | Sepia Mode | Paper Mode (Reflow On) | Night Mode |
-|:---:|:---:|:---:|:---:|
-| <img src="./assets/top-view.png" width="200" alt="Top View" /> | <img src="./assets/sepia-mode.png" width="200" alt="Sepia Mode" /> | <img src="./assets/paper-mode-reflow-on.png" width="200" alt="Paper Mode with Reflow" /> | <img src="./assets/night-mode.png" width="200" alt="Night Mode" /> |
+| Paper Mode | Sepia Mode | Night Mode |
+|:---:|:---:|:---:|
+| <img src="./assets/paper-mode.png" width="240" alt="Paper reading mode" /> | <img src="./assets/sepia-mode.png" width="240" alt="Sepia reading mode" /> | <img src="./assets/night-mode.png" width="240" alt="Night reading mode" /> |
+| **Reflow Mode** | **Dictionary Lookup** | **Text-to-Speech** |
+| <img src="./assets/reflow-mode.png" width="240" alt="Reflow mode" /> | <img src="./assets/dictionary-lookup-mode.png" width="240" alt="Dictionary lookup mode" /> | <img src="./assets/text-to-speech-mode.png" width="240" alt="Text-to-speech mode" /> |
 
 ## Features
 
