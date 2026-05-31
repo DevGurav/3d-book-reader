@@ -234,16 +234,14 @@ export function BookReader({ config: overrideConfig }) {
   const synthRef = useRef(null)
   const [availableVoices, setAvailableVoices] = useState([])
 
-  useEffect(() => {
-    const updateVoices = () => {
-      setAvailableVoices(window.speechSynthesis.getVoices())
-    }
-    if (window.speechSynthesis) {
-      updateVoices()
-      window.speechSynthesis.addEventListener('voiceschanged', updateVoices)
-      return () => window.speechSynthesis.removeEventListener('voiceschanged', updateVoices)
-    }
-  }, [])
+  // Lookup / Text Overlay State
+  const [textOverlayActive, setTextOverlayActive] = useState(false)
+  const [overlayText, setOverlayText] = useState("")
+  const [lookupWord, setLookupWord] = useState("")
+  const [dictResult, setDictResult] = useState(null)
+  const [wikiResult, setWikiResult] = useState(null)
+  const [popupPos, setPopupPos] = useState(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
 
   // Reflow (re-typeset) reading mode
   const [reflowOn, setReflowOn] = useState(config.defaultReflow)
@@ -255,6 +253,38 @@ export function BookReader({ config: overrideConfig }) {
   // once the target mode's page count is known (see the effect below) so we don't jump to page 1.
   const pendingFractionRef = useRef(null)
 
+  // Re-paginate the extracted text whenever reflow typography changes.
+  const reflowPages = useMemo(
+    () => (reflowOn && paragraphs ? paginate(paragraphs, { fontPx, lineHeightMul, darkness }) : null),
+    [reflowOn, paragraphs, fontPx, lineHeightMul, darkness],
+  )
+  const effectivePages = reflowOn ? (reflowPages?.length ?? 0) : numPages
+
+  useEffect(() => {
+    let canceled = false
+    const loadText = async () => {
+      if (!textOverlayActive || !pdfDoc) return
+      let text = ""
+      setOverlayText("Extracting text from page...")
+      if (layoutMode === 'two') {
+        const t1 = await extractPageText(pdfDoc, leftPageNum)
+        text += t1 + "\n\n"
+        if (leftPageNum + 1 <= effectivePages) {
+          const t2 = await extractPageText(pdfDoc, leftPageNum + 1)
+          text += t2
+        }
+      } else {
+        const targetPage = leftPageNum + focusOffset
+        if (targetPage <= effectivePages) {
+          text += await extractPageText(pdfDoc, targetPage)
+        }
+      }
+      if (!canceled) setOverlayText(text || "No selectable text found on this page.")
+    }
+    loadText()
+    return () => { canceled = true }
+  }, [textOverlayActive, leftPageNum, layoutMode, focusOffset, pdfDoc, effectivePages])
+
   // Apply a freshly-loaded PDF (shared by the file picker and the ?pdf= auto-loader).
   const applyPdf = useCallback((pdf, name) => {
     setPdfDoc(pdf)
@@ -265,7 +295,45 @@ export function BookReader({ config: overrideConfig }) {
     setParagraphs(null)   // force re-extraction for reflow on the new document
   }, [])
 
-  // Resolve config from the URL once on mount; auto-load a fixed PDF if the embed supplied one.
+  const handleTextSelection = async (e) => {
+    // Ignore clicks inside the popup itself
+    if (e.target.closest('#lookup-popup')) return
+    
+    // Clear popup if no text selected, or close button clicked
+    const selection = window.getSelection()
+    const text = selection.toString().trim()
+
+    // Validate selection length (a single word or short phrase, max ~4 words, max 40 chars)
+    if (!text || text.length > 40 || text.split(' ').length > 4) {
+      setPopupPos(null)
+      return
+    }
+
+    setPopupPos({ x: e.clientX, y: e.clientY })
+    setLookupWord(text)
+    setLookupLoading(true)
+    setDictResult(null)
+    setWikiResult(null)
+
+    try {
+      const dRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`)
+      if (dRes.ok) {
+        const dData = await dRes.json()
+        setDictResult(dData[0])
+      }
+      const wRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(text)}`)
+      if (wRes.ok) {
+        const wData = await wRes.json()
+        if (wData.type !== 'https://mediawiki.org/wiki/HyperSwitch/errors/not_found' && wData.title) {
+          setWikiResult(wData)
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setLookupLoading(false)
+  }
+
   useEffect(() => {
     const cfg = resolveConfig({ ...DEFAULT_CONFIG, ...(overrideConfig || {}) }, window.location.search)
     setConfig(cfg)
@@ -308,13 +376,6 @@ export function BookReader({ config: overrideConfig }) {
       mqlPortrait.removeEventListener('change', applyPortrait)
     }
   }, [])
-
-  // Re-paginate the extracted text whenever reflow typography changes.
-  const reflowPages = useMemo(
-    () => (reflowOn && paragraphs ? paginate(paragraphs, { fontPx, lineHeightMul, darkness }) : null),
-    [reflowOn, paragraphs, fontPx, lineHeightMul, darkness],
-  )
-  const effectivePages = reflowOn ? (reflowPages?.length ?? 0) : numPages
 
   // Extract the document's text the first time reflow is enabled for this PDF.
   useEffect(() => {
@@ -677,6 +738,87 @@ export function BookReader({ config: overrideConfig }) {
         )}
       </div>
 
+      {/* Interactive Text Overlay */}
+      {textOverlayActive && (
+        <div 
+          onMouseUp={handleTextSelection}
+          style={{
+            position: 'absolute', top: 40, bottom: 40, left: 'max(5%, 40px)', right: showAside ? 320 : 'max(5%, 40px)',
+            background: readingMode === 'dark' ? 'rgba(20,20,30,0.92)' : 'rgba(255,255,255,0.92)',
+            color: readingMode === 'dark' ? '#eee' : '#111',
+            padding: '40px 60px', borderRadius: 12, border: '1px solid rgba(150,150,150,0.2)',
+            overflowY: 'auto', zIndex: 10, backdropFilter: 'blur(8px)',
+            fontSize: 18, lineHeight: 1.7, fontFamily: 'Georgia, serif',
+            whiteSpace: 'pre-wrap', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+            transition: 'background 0.3s, color 0.3s', userSelect: 'text'
+          }}
+        >
+          <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 24, opacity: 0.6, fontFamily: 'sans-serif', borderBottom: '1px solid rgba(150,150,150,0.2)', paddingBottom: 12 }}>
+            Dictionary Mode Active — Select any word to view its meaning
+            <button 
+              onClick={() => setTextOverlayActive(false)} 
+              style={{ float: 'right', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 20, lineHeight: 0, opacity: 0.8 }}
+            >×</button>
+          </div>
+          <div style={{ userSelect: 'auto', cursor: 'text' }}>
+            {overlayText}
+          </div>
+        </div>
+      )}
+
+      {/* Dictionary Popup */}
+      {popupPos && (
+        <div 
+          id="lookup-popup"
+          style={{
+            position: 'fixed',
+            left: Math.max(10, Math.min(popupPos.x + 10, window.innerWidth - 330)),
+            top: Math.max(10, Math.min(popupPos.y + 10, window.innerHeight - 410)),
+            width: 320, background: '#1e1e24', color: '#fff',
+            borderRadius: 10, padding: 20, zIndex: 9999,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)',
+            fontFamily: 'sans-serif', maxHeight: 400, overflowY: 'auto'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 18, color: accent }}>{lookupWord}</h3>
+            <button onClick={() => setPopupPos(null)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+          
+          {lookupLoading ? (
+            <div style={{ fontSize: 13, color: '#888' }}>Searching Dictionary & Wikipedia...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {dictResult && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#aaa', textTransform: 'uppercase', marginBottom: 4 }}>Dictionary</div>
+                  {dictResult.phonetic && <div style={{ fontSize: 13, color: '#888', marginBottom: 6 }}>{dictResult.phonetic}</div>}
+                  {dictResult.meanings.slice(0, 2).map((m, i) => (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, color: accent, fontStyle: 'italic', marginRight: 6 }}>{m.partOfSpeech}</span>
+                      <span style={{ fontSize: 13, lineHeight: 1.4 }}>{m.definitions[0].definition}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {wikiResult && wikiResult.extract && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#aaa', textTransform: 'uppercase', marginBottom: 4 }}>Wikipedia</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.9 }}>
+                    {wikiResult.extract.length > 220 ? wikiResult.extract.substring(0, 220) + '...' : wikiResult.extract}
+                  </div>
+                </div>
+              )}
+
+              {!dictResult && !wikiResult && (
+                <div style={{ fontSize: 13, color: '#888' }}>No exact definition or Wikipedia article found.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Panel toggle — hide/show the control panel */}
       {config.showSidebar && !focusMode && (
         <button
@@ -743,8 +885,21 @@ export function BookReader({ config: overrideConfig }) {
           </label>
         )}
 
-        {/* Audio Context Features */}
+        {/* Tools and Audio */}
         <div>
+          <div style={sectionLabel}>Reading Tools</div>
+          <button
+            onClick={() => setTextOverlayActive(!textOverlayActive)}
+            disabled={!pdfDoc || loading}
+            style={{
+              ...panelBtn(textOverlayActive, !pdfDoc), width: '100%', marginBottom: 16,
+              background: textOverlayActive ? accent : undefined,
+              color: textOverlayActive ? '#111' : undefined
+            }}
+          >
+            {textOverlayActive ? 'Close Dictionary Mode' : 'Dictionary Lookup Mode'}
+          </button>
+          
           <div style={sectionLabel}>Audio</div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
             <button

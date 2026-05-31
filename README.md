@@ -4,6 +4,8 @@ Open any PDF and read it on a realistic 3D book in the browser — two-page spre
 control sidebar, zoom-into-any-section, reading modes, and an accessibility-focused reflow mode.
 Built with Next.js and React Three Fiber.
 
+📖 **[Read the comprehensive Project Journey & Technical Documentation](./PROJECT_DOCUMENTATION.md)**
+
 **🔗 Live demo: [3d-book-reader.vercel.app](https://3d-book-reader.vercel.app/)**
 
 ## Screenshots
@@ -23,6 +25,9 @@ Built with Next.js and React Three Fiber.
 - **Reading modes** — Paper, Sepia, and Night, each with matched background and lighting.
 - **Reflow mode** — re-typesets extracted text with adjustable font size, line spacing, and
   weight (Light / Normal / Bold) for comfortable reading.
+- **Text-to-Speech** — advanced natural voice narration with sentence chunking to prevent browser crashes and automatic page-turning at the end of pages.
+- **Interactive Dictionary Popup** — select text on the page to instantly view Free Dictionary definitions and Wikipedia summaries overlay.
+- **Immersive Audio** — high-quality page flip sound effects when navigating.
 - **Navigation** — Prev / Next, plus `←` / `→` / `Space` shortcuts (one spread at a time).
 
 ## Tech stack
