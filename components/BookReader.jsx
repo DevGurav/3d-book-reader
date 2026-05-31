@@ -8,7 +8,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { BookViewer } from './BookViewer'
-import { loadPdf, renderPdfPageToCanvas } from '../lib/pdfLoader'
+import { loadPdf, renderPdfPageToCanvas, extractPageText } from '../lib/pdfLoader'
 import { extractParagraphs, paginate, renderReflowPage } from '../lib/reflow'
 import { DEFAULT_CONFIG, resolveConfig } from '../lib/bookieConfig'
 
@@ -228,6 +228,23 @@ export function BookReader({ config: overrideConfig }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [focusMode, setFocusMode] = useState(false)
 
+  // Text-to-Speech State
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [ttsRate, setTtsRate] = useState(1.0)
+  const synthRef = useRef(null)
+  const [availableVoices, setAvailableVoices] = useState([])
+
+  useEffect(() => {
+    const updateVoices = () => {
+      setAvailableVoices(window.speechSynthesis.getVoices())
+    }
+    if (window.speechSynthesis) {
+      updateVoices()
+      window.speechSynthesis.addEventListener('voiceschanged', updateVoices)
+      return () => window.speechSynthesis.removeEventListener('voiceschanged', updateVoices)
+    }
+  }, [])
+
   // Reflow (re-typeset) reading mode
   const [reflowOn, setReflowOn] = useState(config.defaultReflow)
   const [fontPx, setFontPx] = useState(REFLOW_DEFAULTS.fontPx)
@@ -364,6 +381,100 @@ export function BookReader({ config: overrideConfig }) {
     }
     return () => { canceled = true }
   }, [pdfDoc, leftPageNum, readingMode, renderScale, reflowOn, reflowPages, fontPx, lineHeightMul, darkness, numPages])
+
+  // Text-To-Speech engine
+  const handleTTS = async () => {
+    if (!window.speechSynthesis) {
+      alert("Text-to-speech is not supported in this browser.")
+      return
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      return
+    }
+
+    if (!pdfDoc) return
+
+    setIsSpeaking(true)
+    try {
+      // Extract text depending on one or two page layout
+      let text = ""
+      if (layoutMode === 'two') {
+        text += await extractPageText(pdfDoc, leftPageNum)
+        if (leftPageNum + 1 <= effectivePages) {
+          text += " " + await extractPageText(pdfDoc, leftPageNum + 1)
+        }
+      } else {
+        const targetPage = leftPageNum + focusOffset
+        if (targetPage <= effectivePages) {
+          text += await extractPageText(pdfDoc, targetPage)
+        }
+      }
+
+      if (!text.trim()) {
+        setIsSpeaking(false)
+        return
+      }
+
+      // Fix SpeechSynthesis Error by chunking text into sentences (limits are usually 250 chars)
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+      let currentSentence = 0
+
+      // Priority list: Google/Siri English -> Any English -> Any Natural -> Fallback
+      let idealVoice = null
+      if (availableVoices.length > 0) {
+        idealVoice = 
+          availableVoices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Siri') || v.name.includes('Natural'))) || 
+          availableVoices.find(v => v.lang.startsWith('en')) || 
+          availableVoices[0]
+      }
+
+      const speakNextChunk = () => {
+        if (currentSentence >= sentences.length) {
+          setIsSpeaking(false)
+          if (!atLastPage) {
+            handleNextPage()
+          }
+          return
+        }
+
+        const chunk = sentences[currentSentence].trim()
+        if (!chunk) {
+          currentSentence++
+          speakNextChunk()
+          return
+        }
+
+        const utterance = new SpeechSynthesisUtterance(chunk)
+        if (idealVoice) utterance.voice = idealVoice
+        utterance.rate = ttsRate
+        utterance.pitch = 1.0
+
+        synthRef.current = utterance
+
+        utterance.onend = () => {
+          currentSentence++
+          speakNextChunk()
+        }
+
+        utterance.onerror = (e) => {
+          if (e.error !== 'canceled') {
+            console.error("Speech synthesis error", e)
+          }
+          setIsSpeaking(false)
+        }
+
+        window.speechSynthesis.speak(utterance)
+      }
+
+      speakNextChunk()
+    } catch (err) {
+      console.error(err)
+      setIsSpeaking(false)
+    }
+  }
 
   // Play the actual MP3 page flip sound
   const playPageFlipSound = () => {
@@ -631,6 +742,41 @@ export function BookReader({ config: overrideConfig }) {
             <input type="file" accept="application/pdf,.pdf" onChange={handleFile} style={{ display: 'none' }} />
           </label>
         )}
+
+        {/* Audio Context Features */}
+        <div>
+          <div style={sectionLabel}>Audio</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button
+              onClick={() => setTtsRate(r => Math.max(0.5, r - 0.25))}
+              style={{ ...panelBtn(), flex: 1 }}
+              title="Read Slower"
+            >
+              Slower
+            </button>
+            <div style={{ flex: 1, textAlign: 'center', fontSize: 13, background: 'rgba(255,255,255,0.05)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {ttsRate}x
+            </div>
+            <button
+              onClick={() => setTtsRate(r => Math.min(2.0, r + 0.25))}
+              style={{ ...panelBtn(), flex: 1 }}
+              title="Read Faster"
+            >
+              Faster
+            </button>
+          </div>
+          <button
+            onClick={handleTTS}
+            disabled={!pdfDoc || loading}
+            style={{
+              ...panelBtn(isSpeaking, !pdfDoc), width: '100%',
+              background: isSpeaking ? accent : undefined,
+              color: isSpeaking ? '#111' : undefined
+            }}
+          >
+            {isSpeaking ? 'Stop Reading' : 'Play Text-to-Speech'}
+          </button>
+        </div>
 
         {/* Reading mode */}
         {config.showModes && (
