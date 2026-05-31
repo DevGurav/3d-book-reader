@@ -540,11 +540,12 @@ export function BookReader({ config: overrideConfig }) {
   // Play the actual MP3 page flip sound
   const playPageFlipSound = () => {
     try {
-      const audio = new window.Audio('/page-flip.mp3')
-      audio.volume = 0.8
-      audio.play().catch(e => {
-        // Ignore autoplay blocks
-      })
+      if (!flipAudioRef.current) {
+        flipAudioRef.current = new window.Audio('/page-flip.mp3')
+        flipAudioRef.current.volume = 0.8
+      }
+      flipAudioRef.current.currentTime = 0
+      flipAudioRef.current.play().catch(() => {})
     } catch (e) {
       // Ignore
     }
@@ -594,6 +595,7 @@ export function BookReader({ config: overrideConfig }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [leftPageNum, effectivePages, pdfDoc, layoutMode, focusOffset, atLastPage, atFirstPage])
 
+  const flipAudioRef = useRef(null)
   const swipeStartRef = useRef({ x: 0, y: 0 })
   const onPointerDown = (e) => {
     swipeStartRef.current = { x: e.clientX, y: e.clientY }
@@ -695,7 +697,7 @@ export function BookReader({ config: overrideConfig }) {
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
-        <Canvas camera={{ fov: 45 }} style={{ width: '100%', height: '100%' }}>
+        <Canvas camera={{ fov: 45 }} dpr={[1, 2]} frameloop="demand" style={{ width: '100%', height: '100%' }}>
           <ambientLight intensity={light.ambient} color={light.color} />
           <directionalLight position={[0, 6, 1]} intensity={light.dir} />
           <Suspense fallback={null}>
@@ -756,7 +758,7 @@ export function BookReader({ config: overrideConfig }) {
           <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 24, opacity: 0.6, fontFamily: 'sans-serif', borderBottom: '1px solid rgba(150,150,150,0.2)', paddingBottom: 12 }}>
             Dictionary Mode Active — Select any word to view its meaning
             <button 
-              onClick={() => setTextOverlayActive(false)} 
+              onClick={() => { setTextOverlayActive(false); setPopupPos(null) }}
               style={{ float: 'right', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 20, lineHeight: 0, opacity: 0.8 }}
             >×</button>
           </div>
@@ -889,7 +891,7 @@ export function BookReader({ config: overrideConfig }) {
         <div>
           <div style={sectionLabel}>Reading Tools</div>
           <button
-            onClick={() => setTextOverlayActive(!textOverlayActive)}
+            onClick={() => { setTextOverlayActive(v => { if (v) setPopupPos(null); return !v }) }}
             disabled={!pdfDoc || loading}
             style={{
               ...panelBtn(textOverlayActive, !pdfDoc), width: '100%', marginBottom: 16,
