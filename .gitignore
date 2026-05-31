@@ -41,3 +41,6 @@ desktop.ini
 
 # local agent tooling
 .claude/
+
+# feature discussion notes
+feature.txt
