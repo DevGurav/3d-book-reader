@@ -53,43 +53,55 @@ Our main focus was **Accessibility, Interactivity, and Polish**—which led to t
 ## Step-by-Step Development Journey
 
 1. **Foundation & 3D Initialization:**
-   We started by setting up Next.js and React Three Fiber. A Blender-built book model (`.glb`) was loaded into the canvas. Initial hurdles involved mapping 2D HTML Canvas elements (where PDF.js draws) as textures onto the 3D meshes of the book's pages.
+   We started by setting up Next.js and React Three Fiber architecture. Our primary concern was the disparity between conventional DOM-based rendering and WebGL. A Blender-built book model (`.glb`) was loaded into the `<Canvas>` environment. The very first challenge involved calculating the UV maps of the imported mesh so that we could paint 2D HTML `<canvas>` elements—where PDF.js draws pixel-by-page data—as flat `CanvasTexture` surfaces wrapped seamlessly around the 3D meshes of the book's pages.
 
-2. **PDF Parsing & Rendering:**
-   `pdfjs-dist` was integrated via a Web Worker. We built `pdfLoader.js` to render the pages into hidden in-memory `<canvas>` tags. These canvases were then passed to Three.js materials (`CanvasTexture`) so the book would display the actual PDF content.
+2. **PDF Parsing Architecture with Web Workers:**
+   Rendering complex Vector PDFs on the main thread is computationally heavy and creates massive UI stutter. We integrated `pdfjs-dist` (by Mozilla) and configured it to strictly utilize a dedicated Web Worker (`pdf.worker.min.mjs`). We wrapped this inside `lib/pdfLoader.js`—which cleanly parses binary array buffers into memory, calculates aspect ratios, and asynchronously generates the backing canvases independent of the React Fiber rendering cycle.
 
 3. **Interactivity & Camera Controls:**
-   We added `@react-three/drei`'s `OrbitControls`, allowing users to drag to rotate and scroll to zoom. We implemented a dynamic resolution system: zooming in triggers PDF.js to re-render the canvas at a much higher DPI, ensuring text stays crisp regardless of camera distance.
+   With static pages rendering correctly, we needed to allow the user to read naturally. We leveraged `@react-three/drei`'s `OrbitControls`. We heavily configured its properties (`enableDamping`, `panSpeed`, `zoomSpeed`) to give it a physical presence. 
+   - *Technical Triumph (Adaptive Resolution):* Drawing every page at 4K resolution crashes mobile browsers via memory faults. Instead, we implemented an Adaptive Resolution observer tracking the camera's distance to the book meshes. When a user scrolls to zoom in, `pdfLoader.js` receives a signal to re-render the current spread at a much higher DPI. The texture updates, ensuring text stays crisp *only* when needed, saving VRAM.
 
 4. **Reading Modes & Reflow (Accessibility):**
-   - **Reading Modes:** We added "Paper", "Sepia", and "Night" modes, mapping CSS background colors with Three.js ambient lighting and canvas tinting.
-   - **Reflow:** For users with low vision or varying screen sizes, PDFs are notoriously hard to read. We built a script to extract text lines, merge them into paragraphs, and dynamically re-calculate DOM bounds to generate new "virtual" pages with custom font sizes (`reflow.js`).
+   - **Reading Modes:** We wanted parity with Kindle and Apple Books. We added customizable "Paper", "Sepia" (warm tints), and "Night" (dark mode) states. This involved manipulating CSS for the surrounding HTML application *and* dynamically swapping Three.js `AmbientLight`/`DirectionalLight` instances and modifying the inner `CanvasTexture` pixel data (via inversion loops) to provide authentic glare-free reading.
+   - **Reflow Scripting:** PDFs are rigid and notoriously unsuited for visually impaired readers. We engineered `lib/reflow.js`. This script queries PDF.js for raw text coordinates, maps physical layout positions, reconstructs sentences, and then mathematically re-targets word wrapping into an invisible DOM measuring environment to calculate new "virtual pages" with customizable font sizes safely.
 
-5. **Audio Polish (Page Flip):**
-   To increase immersion, we hooked an MP3 page-turn sound to the "Next" and "Prev" navigation functions. This simple addition made the 3D interaction feel significantly more authentic.
+5. **Immersive Audio (Page Flip FX):**
+   To increase physical immersion, we integrated HTML5 `Audio`. By creating a singleton audio system within React `useRef`, we hooked an MP3 page-turn sound specifically to the "Next" and "Prev" navigation boundary functions. We circumvented iOS and Chrome "autoplay restrictions" by tying the initialization strictly to trusted `onClick` interactions.
 
-6. **Text-to-Speech (TTS) Engine:**
-   We introduced an accessibility powerhouse—reading the book out loud.
-   - **Challenge:** Pushing huge walls of text into `speechSynthesis` causes most browsers to crash or stop arbitrarily.
-   - **Solution:** We used `lib/pdfLoader.js` to extract text from the active page, but internally implemented a **recursive sentence-chunking algorithm** in `BookReader.jsx`. We split text by periods and fed it to the TTS queue piece-by-piece, ensuring uninterrupted playback. We also auto-navigated to the next page once the narration ended.
+6. **Overcoming Text-to-Speech (TTS) Browser Limitations:**
+   We introduced accessibility narration:
+   - *The Problem:* Simply feeding `window.speechSynthesis` a 10,000-word page causes Chrome and Safari to silently discard the payload or crash internally.
+   - *The Solution:* Inside `BookReader.jsx`, we implemented a robust **recursive sentence-chunking algorithm**. The engine extracts raw text via `lib/pdfLoader.js`, runs regex to split strings precisely by punctuation and newlines, and feeds the sentences piece-by-piece to an internal TTS event-queue (`onend` callbacks triggering the next sentence). If it reaches the end of the text array, it cleanly commands the React state to click "Next Page" and begins reading the subsequent spread without lifting a finger.
 
-7. **Dictionary & Wikipedia Overlay:**
-   Being an educational tool, users need to look up concepts directly.
-   - We implemented an overlay that renders the extracted raw text on top of the screen. 
+7. **The Dictionary & Wikipedia Overlay Conundrum:**
+   Being an educational tool, users need to look up concepts directly. However, you cannot highlight text painted onto a WebGL 3D texture using standard native tools.
+   - We implemented a transparent, styled "Overlay" DOM element directly on top of the `<Canvas>` screen. 
    - A user selects a word/phrase using standard mouse highlighting (`window.getSelection`).
-   - The app fires a dual-fetch request to the Free Dictionary API and the Wikipedia API. 
-   - A floating popup then renders definitions and Wiki summaries right where the mouse is positioned.
-   - *Hurdle:* Injecting this feature momentarily broke Next.js Server-Side-Rendering due to duplicate hook initializations, which we detected via `npm run build` and squashed by unifying the render states.
+   - The app fires a parallel `Promise.all` fetch request to both the Free Dictionary API and the Wikipedia REST API. 
+   - A constrained floating popup (`lookup-popup`) renders definitions and Wiki summaries tightly to `e.clientY` / `e.clientX`.
+   - *The Next.js SSR Bug:* Injecting this massive feature momentarily broke our Next.js Server-Side-Rendering build script (`ReferenceError`). Next.js Turbopack caught duplicate React variable declarations and invalid hooks hoisted during the `npm run build` compilation. We audited the Hook dependency arrays, purged the duplicate variables inside `BookReader.jsx`, and solidified the execution context.
 
 ---
 
 ## Core Features In-Depth
 
-### 1. `BookViewer` & Dynamic Textures
-Three.js uses `CanvasTexture()` to read HTML5 canvases. Every time the user turns a page, `pdfLoader.js` re-draws the new PDF pages to the off-screen canvases. React Three Fiber detects this prop change, marks the `texture.needsUpdate = true`, and the 3D mesh updates instantly.
+### 1. Adaptive `BookViewer` & Dynamic Textures
+Three.js uses `CanvasTexture()` to read HTML5 canvases. Inside `<BookViewer>`, we pass the active left/right canvases as props. A React `useEffect` listener detects when a user changes pages, triggering `pdfLoader.js` to redraw the offline buffers. We then flag `texture.needsUpdate = true`, which flushes the GPU buffer and redraws the PDF content onto the 3D book model geometry instantly and optimally.
 
-### 2. High-Quality Web Speech Integration
-`window.speechSynthesis.getVoices()` is asynchronous. We implemented a `useEffect` listener for the `voiceschanged` event to map and prioritize high-quality local system voices (e.g., "Google", "Siri", "Natural", "Premium") so the book doesn't sound robotic. Speed bounds range from `0.5x` to `2.0x`.
+### 2. High-Quality Web Speech Prioritization
+Because web speech voices load asynchronously depending on OS, we implemented a `useEffect` loop that listens to `window.speechSynthesis.on('voiceschanged')`. We then filter the returned blob to search for priority keywords (`Google`, `Premium`, `Siri`, `Natural`)—ignoring robotic legacy robotic synthesizers. This is why the reading experience sounds human despite using standard browser APIs without expensive AI voice API costs.
 
-### 3. Server vs. Client Code Isolation
-Because Window, Document, and Three.js APIs do not exist on a Node.js server, any components touching them were isolated or conditionally rendered. Next.js statically builds the homepage, but the `BookReader` is explicitly rendered as a client component to avoid `ReferenceError` crashes during build time.
+### 3. State Management & Server vs. Client Code Isolation
+Because `window`, `document`, and Three.js APIs do not exist on a Node.js server, deploying a Next.js application creates severe hydration mismatch errors if not managed carefully. Next.js statically builds the Homepage fully on the server for lightning-fast SEO (the `<Landing />`), but the entire `<BookReader />` environment executes behind strict conditional client-side barriers. We utilized `useEffect` lazy loaders to postpone 3D canvas hydration until after the page physically paints matching client/server HTML, nullifying the `ReferenceError` crashes.
+
+### 4. Interactive Lookup Scope Limitations
+To prevent the Wikipedia / Dictionary popups from fetching entire paragraphs if a user playfully drags their mouse across the screen, the system includes defensive limiters:
+```javascript
+// Validate selection length (a single word or short phrase, max ~4 words, max 40 chars)
+if (!text || text.length > 40 || text.split(' ').length > 4) {
+  setPopupPos(null)
+  return
+}
+```
+Furthermore, `e.target.closest('#lookup-popup')` prevents infinite nesting or clearing the display when a user tries to scroll down on a particularly long Wikipedia article definition.

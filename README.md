@@ -16,19 +16,15 @@ Built with Next.js and React Three Fiber.
 
 ## Features
 
-- **Open any PDF** — fully client-side; nothing is uploaded. Rendered with pdf.js.
-- **3D two-page spread** — PDF pages painted onto the real page surfaces of a 3D book model.
-- **Control sidebar** — all controls in one right-hand panel: Open PDF, reading mode, reflow,
-  zoom/reset, and page navigation.
-- **Zoom into any section** — scroll to zoom toward the cursor, drag to pan, **Reset view** to
-  re-frame. Pages re-render at higher resolution as you zoom in, so text stays crisp.
-- **Reading modes** — Paper, Sepia, and Night, each with matched background and lighting.
-- **Reflow mode** — re-typesets extracted text with adjustable font size, line spacing, and
-  weight (Light / Normal / Bold) for comfortable reading.
-- **Text-to-Speech** — advanced natural voice narration with sentence chunking to prevent browser crashes and automatic page-turning at the end of pages.
-- **Interactive Dictionary Popup** — select text on the page to instantly view Free Dictionary definitions and Wikipedia summaries overlay.
-- **Immersive Audio** — high-quality page flip sound effects when navigating.
-- **Navigation** — Prev / Next, plus `←` / `→` / `Space` shortcuts (one spread at a time).
+- **Private & Client-Side** — Any PDF opens entirely in your browser using `pdf.js`. No servers, no uploads, 100% privacy.
+- **Realistic 3D Immersion** — Your document is painted onto the 3D meshes of a modeled book layout. Complete with high-quality MP3 **Page Flip Audio FX** for tactile navigation.
+- **Dynamic 3D Camera Controls** — Intelligent `OrbitControls` let you zoom precisely into any paragraph. Pages adaptively re-render to crystal-clear high resolutions on close-up so text is never blurry.
+- **Visual Accessibility (Reflow & Reading Modes)** 
+  - Switch visually between **Paper, Sepia, and Night** modes via Three.js ambient lights and `CanvasTexture` filters.
+  - Turn on **Reflow Mode** to structurally extract the raw PDF text and mathematically re-typeset it (adjust fonts, weight, and line height manually). Perfect for visual impairments.
+- **Text-to-Speech (TTS) Engine** — Sit back and listen. Implements native `speechSynthesis` equipped with recursive recursive paragraph-chunking that bypasses traditional browser memory limits, seamlessly flipping the page automatically when it finishes reading the current spread.
+- **Dictionary / Wikipedia Integration** — Double-click any word or drag any phrase onto the interactive text overlay to trigger an API lookup. A fully styled UI popup immediately displays definitions, phonetics, and encyclopedic summaries for powerful learning without leaving the app.
+- **Intuitive Navigation** — Right-hand control sidebar, responsive UI, drag & swipe support for touchpads, and `←` / `→` / `Space` keybindings.
 
 ## Tech stack
 
