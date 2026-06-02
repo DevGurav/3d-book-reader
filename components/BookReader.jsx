@@ -221,6 +221,7 @@ export function BookReader({ config: overrideConfig }) {
   const [leftPageNum, setLeftPageNum] = useState(1)   // left (odd) page of the current spread
   const [numPages, setNumPages] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [isPaging, setIsPaging] = useState(false)
   const [error, setError] = useState(null)
 
   // Responsive layout: panel collapses to a slide-in drawer on narrow screens.
@@ -430,17 +431,32 @@ export function BookReader({ config: overrideConfig }) {
       return
     }
 
-    renderPdfPageToCanvas(pdfDoc, leftPageNum, renderScale, READING_PADDING, readingMode)
-      .then((canvas) => { if (!canceled) setLeftPageCanvas(canvas) })
-      .catch((err) => { if (!canceled) setError(`Page ${leftPageNum} render failed: ${err.message}`) })
-    if (rightNum <= numPages) {
-      renderPdfPageToCanvas(pdfDoc, rightNum, renderScale, READING_PADDING, readingMode)
-        .then((canvas) => { if (!canceled) setRightPageCanvas(canvas) })
-        .catch(() => {})
-    } else {
-      setRightPageCanvas(null)   // odd page count → blank right page on the last spread
+    setIsPaging(true)
+
+    const renderLeft = renderPdfPageToCanvas(pdfDoc, leftPageNum, renderScale, READING_PADDING, readingMode)
+    const renderRight = rightNum <= numPages 
+      ? renderPdfPageToCanvas(pdfDoc, rightNum, renderScale, READING_PADDING, readingMode)
+      : Promise.resolve(null)
+
+    Promise.all([renderLeft, renderRight])
+      .then(([lCanvas, rCanvas]) => {
+        if (!canceled) {
+          setLeftPageCanvas(lCanvas)
+          setRightPageCanvas(rCanvas)
+          setIsPaging(false)
+        }
+      })
+      .catch((err) => {
+        if (!canceled) {
+          setError(`Page render failed: ${err.message}`)
+          setIsPaging(false)
+        }
+      })
+
+    return () => { 
+      canceled = true
+      setIsPaging(false) // in case of fast unmount/cancel, lift lock
     }
-    return () => { canceled = true }
   }, [pdfDoc, leftPageNum, readingMode, renderScale, reflowOn, reflowPages, fontPx, lineHeightMul, darkness, numPages])
 
   // Text-To-Speech engine
@@ -556,6 +572,7 @@ export function BookReader({ config: overrideConfig }) {
 
   // Step the spread by one (two pages) or step by one page if in one-page mode.
   const handleNextPage = () => {
+    if (isPaging) return // Prevent double-clicks while PDF renders
     if (pdfDoc && atLastPage) return
     playPageFlipSound()
     if (layoutMode === 'one') {
@@ -570,6 +587,7 @@ export function BookReader({ config: overrideConfig }) {
     }
   }
   const handlePrevPage = () => {
+    if (isPaging) return // Prevent double-clicks while PDF renders
     if (atFirstPage) return
     playPageFlipSound()
     if (layoutMode === 'one') {
