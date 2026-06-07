@@ -23,6 +23,7 @@ const REFLOW_DEFAULTS = { fontPx: 38, lineHeightMul: 1.6, darkness: 1 }
 const FONT_MIN = 24, FONT_MAX = 84, FONT_STEP = 4
 const SPACE_MIN = 1.2, SPACE_MAX = 2.6, SPACE_STEP = 0.1
 const DARKNESS_LABEL = ['Light', 'Normal', 'Bold']
+const FONT_LABEL = { classic: 'Classic', dyslexic: 'Dyslexic' }
 
 // Below this viewport width the control panel becomes a slide-in drawer instead of a fixed column.
 const NARROW_QUERY = '(max-width: 720px)'
@@ -249,6 +250,7 @@ export function BookReader({ config: overrideConfig }) {
   const [fontPx, setFontPx] = useState(REFLOW_DEFAULTS.fontPx)
   const [lineHeightMul, setLineHeightMul] = useState(REFLOW_DEFAULTS.lineHeightMul)
   const [darkness, setDarkness] = useState(REFLOW_DEFAULTS.darkness)
+  const [fontFamily, setFontFamily] = useState('classic')
   const [paragraphs, setParagraphs] = useState(null)
   // On a reflow⇄normal toggle, the page counts differ; stash the reading fraction and re-apply it
   // once the target mode's page count is known (see the effect below) so we don't jump to page 1.
@@ -256,8 +258,8 @@ export function BookReader({ config: overrideConfig }) {
 
   // Re-paginate the extracted text whenever reflow typography changes.
   const reflowPages = useMemo(
-    () => (reflowOn && paragraphs ? paginate(paragraphs, { fontPx, lineHeightMul, darkness }) : null),
-    [reflowOn, paragraphs, fontPx, lineHeightMul, darkness],
+    () => (reflowOn && paragraphs ? paginate(paragraphs, { fontPx, lineHeightMul, darkness, fontFamily }) : null),
+    [reflowOn, paragraphs, fontPx, lineHeightMul, darkness, fontFamily],
   )
   const effectivePages = reflowOn ? (reflowPages?.length ?? 0) : numPages
 
@@ -423,7 +425,7 @@ export function BookReader({ config: overrideConfig }) {
 
     if (reflowOn) {
       if (!reflowPages) return   // still extracting / paginating
-      const opts = { fontPx, lineHeightMul, darkness, mode: readingMode }
+      const opts = { fontPx, lineHeightMul, darkness, mode: readingMode, fontFamily }
       const l = reflowPages[leftPageNum - 1]
       const r = reflowPages[rightNum - 1]
       setLeftPageCanvas(l ? renderReflowPage(l, opts) : null)
@@ -457,7 +459,7 @@ export function BookReader({ config: overrideConfig }) {
       canceled = true
       setIsPaging(false) // in case of fast unmount/cancel, lift lock
     }
-  }, [pdfDoc, leftPageNum, readingMode, renderScale, reflowOn, reflowPages, fontPx, lineHeightMul, darkness, numPages])
+  }, [pdfDoc, leftPageNum, readingMode, renderScale, reflowOn, reflowPages, fontPx, lineHeightMul, darkness, fontFamily, numPages])
 
   // Text-To-Speech engine
   const handleTTS = async () => {
@@ -668,6 +670,34 @@ export function BookReader({ config: overrideConfig }) {
     controls.update()
   }
 
+  const rotateView = (thetaStep, phiStep = 0) => {
+    const api = viewApi.current
+    if (!api) return
+    const { controls, camera } = api
+    const offset = camera.position.clone().sub(controls.target)
+    const spherical = new THREE.Spherical().setFromVector3(offset)
+    spherical.theta += thetaStep
+    spherical.phi = Math.max(0.12, Math.min(Math.PI - 0.12, spherical.phi + phiStep))
+    camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical))
+    camera.lookAt(controls.target)
+    controls.update()
+  }
+
+  const panView = (xStep, yStep) => {
+    const api = viewApi.current
+    if (!api) return
+    const { controls, camera } = api
+    const distance = camera.position.distanceTo(controls.target)
+    const amount = distance * 0.08
+    const forward = controls.target.clone().sub(camera.position).normalize()
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize()
+    const up = new THREE.Vector3().crossVectors(right, forward).normalize()
+    const delta = right.multiplyScalar(xStep * amount).add(up.multiplyScalar(yStep * amount))
+    camera.position.add(delta)
+    controls.target.add(delta)
+    controls.update()
+  }
+
   const bg = SCENE_BG[readingMode]
   const light = LIGHT[readingMode]
   const accent = config.accent
@@ -711,7 +741,7 @@ export function BookReader({ config: overrideConfig }) {
     <div style={{ width: '100%', height: '100%', background: bg, display: 'flex', overflow: 'hidden', position: 'relative' }}>
       {/* 3D viewport */}
       <div 
-        style={{ flex: 1, position: 'relative', minWidth: 0, touchAction: focusMode ? 'none' : 'auto' }}
+        style={{ flex: 1, position: 'relative', minWidth: 0, touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
@@ -739,7 +769,11 @@ export function BookReader({ config: overrideConfig }) {
             enablePan={!focusMode}
             enableZoom={true}
             panSpeed={0.5}
-            zoomSpeed={1.8}
+            rotateSpeed={0.65}
+            zoomSpeed={1.35}
+            screenSpacePanning
+            touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+            mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
             enableDamping
             dampingFactor={0.06}
           />
@@ -993,8 +1027,32 @@ export function BookReader({ config: overrideConfig }) {
               <button onClick={resetView} style={{ ...panelBtn(), flex: 1 }}>Reset view</button>
               <button onClick={() => setFocusMode(true)} style={{ ...panelBtn(), flex: 1, background: accent, color: '#111' }}>Focus</button>
             </div>
+            <div style={{ ...sectionLabel, marginTop: 14 }}>Orbit</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+              <span />
+              <button onClick={() => rotateView(0, -0.16)} title="Tilt up" style={{ ...panelBtn(), minHeight: 34 }}>Tilt +</button>
+              <span />
+              <button onClick={() => rotateView(-0.18, 0)} title="Rotate left" style={{ ...panelBtn(), minHeight: 34 }}>Rot L</button>
+              <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Home</button>
+              <button onClick={() => rotateView(0.18, 0)} title="Rotate right" style={{ ...panelBtn(), minHeight: 34 }}>Rot R</button>
+              <span />
+              <button onClick={() => rotateView(0, 0.16)} title="Tilt down" style={{ ...panelBtn(), minHeight: 34 }}>Tilt -</button>
+              <span />
+            </div>
+            <div style={{ ...sectionLabel, marginTop: 14 }}>Pan</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+              <span />
+              <button onClick={() => panView(0, 1)} title="Pan up" style={{ ...panelBtn(), minHeight: 34 }}>Up</button>
+              <span />
+              <button onClick={() => panView(-1, 0)} title="Pan left" style={{ ...panelBtn(), minHeight: 34 }}>Left</button>
+              <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Center</button>
+              <button onClick={() => panView(1, 0)} title="Pan right" style={{ ...panelBtn(), minHeight: 34 }}>Right</button>
+              <span />
+              <button onClick={() => panView(0, -1)} title="Pan down" style={{ ...panelBtn(), minHeight: 34 }}>Down</button>
+              <span />
+            </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 8, lineHeight: 1.5 }}>
-              Scroll to zoom toward the cursor · drag to rotate · right-drag to pan
+              Pinch or scroll to zoom. One-finger drag rotates; two-finger drag pans.
             </div>
           </div>
         )}
@@ -1032,6 +1090,9 @@ export function BookReader({ config: overrideConfig }) {
                 />
                 <button onClick={() => setDarkness((d) => (d + 1) % 3)} style={{ ...panelBtn(), width: '100%' }}>
                   Darkness: {DARKNESS_LABEL[darkness]}
+                </button>
+                <button onClick={() => setFontFamily((f) => f === 'classic' ? 'dyslexic' : 'classic')} style={{ ...panelBtn(fontFamily === 'dyslexic'), width: '100%' }}>
+                  Font: {FONT_LABEL[fontFamily]}
                 </button>
               </div>
             )}
