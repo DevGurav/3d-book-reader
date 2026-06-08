@@ -28,6 +28,31 @@ Built with Next.js and React Three Fiber.
 - **Dictionary / Wikipedia Integration** — Double-click any word or drag any phrase onto the interactive text overlay to trigger an API lookup. A fully styled UI popup immediately displays definitions, phonetics, and encyclopedic summaries for powerful learning without leaving the app.
 - **Intuitive Navigation** — Right-hand control sidebar, responsive UI, drag & swipe support for touchpads, and `←` / `→` / `Space` keybindings.
 
+## PDF size and page support
+
+Bookie does not set a hard-coded PDF size limit or page-count limit. PDFs are opened locally in
+the user's browser with `pdf.js`, so the practical limit depends on the device, browser memory,
+GPU texture limits, and how heavy the PDF itself is. A text-based novel is much lighter than a
+scanned/image-heavy textbook of the same page count.
+
+| Device class | Comfortable PDF size | Comfortable page count |
+|---|---:|---:|
+| Good desktop/laptop | ~100-300 MB | ~800-1500 pages |
+| Average phone | ~20-80 MB | ~200-500 pages |
+| Low-end phone | ~10-30 MB | ~100-250 pages |
+
+Important behavior notes:
+
+- **Text-based PDFs scale best.** They parse and render more efficiently than scanned books or PDFs made of full-page images.
+- **Scanned/image-heavy PDFs become laggy sooner.** Large page images increase memory, rasterization time, and GPU texture pressure.
+- **Only the active spread is rendered in normal mode.** The app renders the current left/right pages and keeps a small recent-page cache for smoother back/forward navigation.
+- **Reflow mode is more demanding on very large books.** When enabled, it extracts text across the document before re-typesetting, so very large PDFs may take noticeable time on first use.
+- **Vercel is not the bottleneck for local files.** The selected PDF is not uploaded to the server; it is read client-side in the browser.
+
+For production messaging, a good expectation is: normal books up to around **300-500 pages on
+mobile**, with larger books working better on desktop. Instead of blocking large PDFs, consider
+showing a warning around **100 MB** or **500+ pages** so users understand performance may vary.
+
 ## Tech stack
 
 | Layer | Technology |
