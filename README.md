@@ -8,6 +8,14 @@ Built with Next.js and React Three Fiber.
 
 **🔗 Live demo: [3d-book-reader.vercel.app](https://3d-book-reader.vercel.app/)**
 
+## Project status
+
+This project is feature-complete and in final-polish mode. The reader supports client-side PDF
+opening, 3D page rendering, responsive mobile/laptop controls, reading modes, Reflow text,
+dyslexic-friendly typography, text-to-speech, and dictionary lookup. Future work should focus on
+maintenance, browser compatibility checks, and small performance improvements rather than adding
+new major features.
+
 ## Screenshots
 
 | Paper Mode | Sepia Mode | Night Mode |
@@ -35,6 +43,11 @@ the user's browser with `pdf.js`, so the practical limit depends on the device, 
 GPU texture limits, and how heavy the PDF itself is. A text-based novel is much lighter than a
 scanned/image-heavy textbook of the same page count.
 
+Final project testing included a **500-page book**. Normal page navigation, modes, zoom, mobile
+drawer controls, and 3D viewing worked acceptably. Some Reflow actions can feel slower on very
+large books because Reflow extracts and re-typesets document text; this is expected for the
+accessibility mode and is treated as an acceptable trade-off for final release.
+
 | Device class | Comfortable PDF size | Comfortable page count |
 |---|---:|---:|
 | Good desktop/laptop | ~100-300 MB | ~800-1500 pages |
@@ -46,7 +59,7 @@ Important behavior notes:
 - **Text-based PDFs scale best.** They parse and render more efficiently than scanned books or PDFs made of full-page images.
 - **Scanned/image-heavy PDFs become laggy sooner.** Large page images increase memory, rasterization time, and GPU texture pressure.
 - **Only the active spread is rendered in normal mode.** The app renders the current left/right pages and keeps a small recent-page cache for smoother back/forward navigation.
-- **Reflow mode is more demanding on very large books.** When enabled, it extracts text across the document before re-typesetting, so very large PDFs may take noticeable time on first use.
+- **Reflow mode is more demanding on very large books.** When enabled, it extracts text across the document before re-typesetting, so very large PDFs may take noticeable time on first use. The app caches completed extraction work for the open PDF, so returning to Reflow is faster after the first pass.
 - **Vercel is not the bottleneck for local files.** The selected PDF is not uploaded to the server; it is read client-side in the browser.
 
 For production messaging, a good expectation is: normal books up to around **300-500 pages on
