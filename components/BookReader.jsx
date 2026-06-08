@@ -396,12 +396,18 @@ export function BookReader({ config: overrideConfig }) {
   useEffect(() => {
     if (!reflowOn || !pdfDoc || paragraphs) return
     let canceled = false
+    const controller = new AbortController()
     setLoading(true)
-    extractParagraphs(pdfDoc)
+    extractParagraphs(pdfDoc, { signal: controller.signal })
       .then((ps) => { if (!canceled) setParagraphs(ps) })
-      .catch((err) => { if (!canceled) setError(`Reflow extraction failed: ${err.message}`) })
+      .catch((err) => {
+        if (!canceled && err?.name !== 'AbortError') setError(`Reflow extraction failed: ${err.message}`)
+      })
       .finally(() => { if (!canceled) setLoading(false) })
-    return () => { canceled = true }
+    return () => {
+      canceled = true
+      controller.abort()
+    }
   }, [reflowOn, pdfDoc, paragraphs])
 
   // Keep the spread valid as reflow pagination shrinks/grows with typography.
