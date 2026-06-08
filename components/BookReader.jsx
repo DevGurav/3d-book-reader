@@ -27,6 +27,7 @@ const FONT_LABEL = { classic: 'Classic', dyslexic: 'Dyslexic' }
 
 // Below this viewport width the control panel becomes a slide-in drawer instead of a fixed column.
 const NARROW_QUERY = '(max-width: 720px)'
+const PHONE_QUERY = '(pointer: coarse) and (max-width: 920px)'
 
 // The open book shows a 2-page spread (1–2, 3–4, …): the LEFT page is the odd page, the RIGHT its
 // successor. Nav steps by 2. Snap any page number down to its spread's odd left page.
@@ -227,7 +228,9 @@ export function BookReader({ config: overrideConfig }) {
 
   // Responsive layout: panel collapses to a slide-in drawer on narrow screens.
   const [isNarrow, setIsNarrow] = useState(false)
+  const [isPhoneViewport, setIsPhoneViewport] = useState(false)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [fineControlsOpen, setFineControlsOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
 
   // Text-to-Speech State
@@ -357,25 +360,34 @@ export function BookReader({ config: overrideConfig }) {
   const [isPortrait, setIsPortrait] = useState(false)
   useEffect(() => {
     const mqlNarrow = window.matchMedia(NARROW_QUERY)
+    const mqlPhone = window.matchMedia(PHONE_QUERY)
     const mqlPortrait = window.matchMedia('(orientation: portrait)')
     
-    const applyNarrow = () => { setIsNarrow(mqlNarrow.matches); setPanelOpen(!mqlNarrow.matches) }
+    const applyResponsive = () => {
+      const compact = mqlNarrow.matches || mqlPhone.matches
+      setIsNarrow(mqlNarrow.matches)
+      setIsPhoneViewport(mqlPhone.matches)
+      setPanelOpen(!compact)
+      setFineControlsOpen(!compact)
+    }
     const applyPortrait = () => { 
       setIsPortrait(mqlPortrait.matches)
-      // Force two-page mode if we switch to landscape (to avoid having one-page mode stuck on desktop)
-      if (!mqlPortrait.matches) {
+      // Force two-page mode on desktop landscape, but keep the layout toggle available on phones.
+      if (!mqlPortrait.matches && !mqlPhone.matches) {
         setLayoutMode('two')
       }
     }
     
-    applyNarrow()
+    applyResponsive()
     applyPortrait()
     
-    mqlNarrow.addEventListener('change', applyNarrow)
+    mqlNarrow.addEventListener('change', applyResponsive)
+    mqlPhone.addEventListener('change', applyResponsive)
     mqlPortrait.addEventListener('change', applyPortrait)
     
     return () => {
-      mqlNarrow.removeEventListener('change', applyNarrow)
+      mqlNarrow.removeEventListener('change', applyResponsive)
+      mqlPhone.removeEventListener('change', applyResponsive)
       mqlPortrait.removeEventListener('change', applyPortrait)
     }
   }, [])
@@ -716,22 +728,25 @@ export function BookReader({ config: overrideConfig }) {
     color: 'rgba(255,255,255,0.4)', fontFamily: 'sans-serif', margin: '0 0 6px',
   }
 
-  // The panel is in document flow on wide screens; on narrow screens it overlays as a slide-in
-  // drawer so the 3D viewport keeps the full width.
+  const isCompactDrawer = isNarrow || isPhoneViewport
+  const showFineViewControls = !isCompactDrawer || fineControlsOpen
+
+  // The panel is in document flow on wide screens; on phone-sized screens it overlays as a
+  // slide-in drawer so the 3D viewport keeps the full width in portrait and landscape.
   const asideStyle = {
-    width: isNarrow ? 'min(86vw, 320px)' : 280,
+    width: isCompactDrawer ? 'min(82vw, 320px)' : 280,
     height: '100%', flexShrink: 0, boxSizing: 'border-box',
     background: 'rgba(14,14,20,0.94)', borderLeft: '1px solid rgba(255,255,255,0.1)',
-    display: 'flex', flexDirection: 'column', gap: 20,
-    padding: '22px 18px', overflowY: 'auto', fontFamily: 'sans-serif', color: '#fff',
-    ...(isNarrow ? {
+    display: 'flex', flexDirection: 'column', gap: isCompactDrawer ? 16 : 20,
+    padding: isCompactDrawer ? '20px 16px' : '22px 18px', overflowY: 'auto', fontFamily: 'sans-serif', color: '#fff',
+    ...(isCompactDrawer ? {
       position: 'absolute', top: 0, right: 0, zIndex: 15,
       transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
       transition: 'transform 0.25s ease', boxShadow: '-8px 0 24px rgba(0,0,0,0.45)',
     } : {}),
   }
 
-  const showAside = config.showSidebar && !focusMode && (isNarrow || panelOpen)
+  const showAside = config.showSidebar && !focusMode && (isCompactDrawer || panelOpen)
 
   const activeBox = bookBoxes 
     ? (layoutMode === 'two' ? bookBoxes.both : (focusOffset === 0 ? bookBoxes.left : bookBoxes.right))
@@ -999,7 +1014,7 @@ export function BookReader({ config: overrideConfig }) {
               ))}
             </div>
             
-            {isPortrait && (
+            {(isPortrait || isPhoneViewport) && (
               <>
                 <div style={{ ...sectionLabel, marginTop: 16 }}>Layout</div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -1027,30 +1042,42 @@ export function BookReader({ config: overrideConfig }) {
               <button onClick={resetView} style={{ ...panelBtn(), flex: 1 }}>Reset view</button>
               <button onClick={() => setFocusMode(true)} style={{ ...panelBtn(), flex: 1, background: accent, color: '#111' }}>Focus</button>
             </div>
-            <div style={{ ...sectionLabel, marginTop: 14 }}>Orbit</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-              <span />
-              <button onClick={() => rotateView(0, -0.16)} title="Tilt up" style={{ ...panelBtn(), minHeight: 34 }}>Tilt +</button>
-              <span />
-              <button onClick={() => rotateView(-0.18, 0)} title="Rotate left" style={{ ...panelBtn(), minHeight: 34 }}>Rot L</button>
-              <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Home</button>
-              <button onClick={() => rotateView(0.18, 0)} title="Rotate right" style={{ ...panelBtn(), minHeight: 34 }}>Rot R</button>
-              <span />
-              <button onClick={() => rotateView(0, 0.16)} title="Tilt down" style={{ ...panelBtn(), minHeight: 34 }}>Tilt -</button>
-              <span />
-            </div>
-            <div style={{ ...sectionLabel, marginTop: 14 }}>Pan</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-              <span />
-              <button onClick={() => panView(0, 1)} title="Pan up" style={{ ...panelBtn(), minHeight: 34 }}>Up</button>
-              <span />
-              <button onClick={() => panView(-1, 0)} title="Pan left" style={{ ...panelBtn(), minHeight: 34 }}>Left</button>
-              <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Center</button>
-              <button onClick={() => panView(1, 0)} title="Pan right" style={{ ...panelBtn(), minHeight: 34 }}>Right</button>
-              <span />
-              <button onClick={() => panView(0, -1)} title="Pan down" style={{ ...panelBtn(), minHeight: 34 }}>Down</button>
-              <span />
-            </div>
+            {isCompactDrawer && (
+              <button
+                onClick={() => setFineControlsOpen((open) => !open)}
+                style={{ ...panelBtn(fineControlsOpen), width: '100%', marginTop: 8 }}
+              >
+                {fineControlsOpen ? 'Hide 3D fine controls' : 'Show 3D fine controls'}
+              </button>
+            )}
+            {showFineViewControls && (
+              <>
+                <div style={{ ...sectionLabel, marginTop: 14 }}>Orbit</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                  <span />
+                  <button onClick={() => rotateView(0, -0.16)} title="Tilt up" style={{ ...panelBtn(), minHeight: 34 }}>Tilt +</button>
+                  <span />
+                  <button onClick={() => rotateView(-0.18, 0)} title="Rotate left" style={{ ...panelBtn(), minHeight: 34 }}>Rot L</button>
+                  <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Home</button>
+                  <button onClick={() => rotateView(0.18, 0)} title="Rotate right" style={{ ...panelBtn(), minHeight: 34 }}>Rot R</button>
+                  <span />
+                  <button onClick={() => rotateView(0, 0.16)} title="Tilt down" style={{ ...panelBtn(), minHeight: 34 }}>Tilt -</button>
+                  <span />
+                </div>
+                <div style={{ ...sectionLabel, marginTop: 14 }}>Pan</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                  <span />
+                  <button onClick={() => panView(0, 1)} title="Pan up" style={{ ...panelBtn(), minHeight: 34 }}>Up</button>
+                  <span />
+                  <button onClick={() => panView(-1, 0)} title="Pan left" style={{ ...panelBtn(), minHeight: 34 }}>Left</button>
+                  <button onClick={resetView} title="Center view" style={{ ...panelBtn(), minHeight: 34 }}>Center</button>
+                  <button onClick={() => panView(1, 0)} title="Pan right" style={{ ...panelBtn(), minHeight: 34 }}>Right</button>
+                  <span />
+                  <button onClick={() => panView(0, -1)} title="Pan down" style={{ ...panelBtn(), minHeight: 34 }}>Down</button>
+                  <span />
+                </div>
+              </>
+            )}
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 8, lineHeight: 1.5 }}>
               Pinch or scroll to zoom. One-finger drag rotates; two-finger drag pans.
             </div>
